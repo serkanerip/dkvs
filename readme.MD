@@ -16,6 +16,8 @@ PL - 45 Byte -- Message Body
 ```
 
 ## TODO
+- [ ] Use a log library
+- [ ] Use a config yaml file for configuring nodes
 - [ ] Implement a heartbeat mechanism
 - [ ] Finish Repartitioning Details
 - [ ] Add backup support
