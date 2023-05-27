@@ -7,24 +7,24 @@ import (
 
 type PartitionTable struct {
 	partitions  []*Partition
-	nodeAddress string
+	localNodeID string
 }
 
 type Partition struct {
-	ID          int
-	NodeAddress string
-	Assigned    bool
+	ID       int
+	OwnerID  string
+	Assigned bool
 }
 
-func NewPartitionTable(count int, address string) *PartitionTable {
+func NewPartitionTable(count int, localNodeID string) *PartitionTable {
 	pt := &PartitionTable{
-		partitions: make([]*Partition, 0), nodeAddress: address,
+		partitions: make([]*Partition, 0), localNodeID: localNodeID,
 	}
 	for i := 0; i < count; i++ {
 		pt.partitions = append(pt.partitions, &Partition{
-			ID:          i,
-			NodeAddress: address,
-			Assigned:    true,
+			ID:       i,
+			OwnerID:  localNodeID,
+			Assigned: true,
 		})
 	}
 	return pt
@@ -33,14 +33,14 @@ func NewPartitionTable(count int, address string) *PartitionTable {
 func (pt *PartitionTable) GetOwnedPartitions() []int {
 	ownedPartitions := make([]int, 0)
 	for _, p := range pt.partitions {
-		if p.NodeAddress == pt.nodeAddress {
+		if p.OwnerID == pt.localNodeID {
 			ownedPartitions = append(ownedPartitions, p.ID)
 		}
 	}
 	return ownedPartitions
 }
 
-func (pt *PartitionTable) AssignTo(partitionCount int, address string) {
+func (pt *PartitionTable) AssignTo(partitionCount int, ownerID string) {
 	assignedPartitionCount := 0
 	for _, p := range pt.partitions {
 		if p.Assigned == true {
@@ -50,7 +50,7 @@ func (pt *PartitionTable) AssignTo(partitionCount int, address string) {
 		if assignedPartitionCount == partitionCount {
 			break
 		}
-		p.NodeAddress = address
+		p.OwnerID = ownerID
 		p.Assigned = true
 		assignedPartitionCount++
 	}
@@ -64,14 +64,14 @@ func (pt *PartitionTable) UnAssignAll() {
 
 func (pt *PartitionTable) PrintPartitionTable() {
 	for _, p := range pt.partitions {
-		fmt.Printf("P%d Assigned: %v, Address: %s\n", p.ID, p.Assigned, p.NodeAddress)
+		fmt.Printf("P%d Assigned: %v, Address: %s\n", p.ID, p.Assigned, p.OwnerID)
 	}
 }
 
 func (pt *PartitionTable) ToDTO() *dto.PartitionTableDTO {
 	d := &dto.PartitionTableDTO{Partitions: map[int]string{}}
 	for _, p := range pt.partitions {
-		d.Partitions[p.ID] = p.NodeAddress
+		d.Partitions[p.ID] = p.OwnerID
 	}
 	return d
 }

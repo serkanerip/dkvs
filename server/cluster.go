@@ -5,15 +5,16 @@ import (
 	"dkvs/server/partitiontable"
 	"dkvs/tcp"
 	"fmt"
+	"sort"
 )
 
-type OnRepartitioning func()
-
 type Cluster struct {
-	nodes                   []ClusterNode
-	pt                      *partitiontable.PartitionTable
-	pCount                  int
-	repartitioningListeners []OnRepartitioning
+	localNode              ClusterNode
+	nodes                  []ClusterNode
+	joiningNodes           []ClusterNode
+	pt                     *partitiontable.PartitionTable
+	pCount                 int
+	onPartitionTableUpdate func()
 }
 
 type ClusterNode struct {
@@ -23,6 +24,7 @@ type ClusterNode struct {
 	clusterPort string
 	leader      bool
 	conn        *tcp.Connection
+	startTime   int64
 }
 
 func (c *Cluster) AddNode(newNode ClusterNode) {
@@ -32,30 +34,42 @@ func (c *Cluster) AddNode(newNode ClusterNode) {
 		}
 	}
 	c.nodes = append(c.nodes, newNode)
+	sort.Slice(c.nodes, func(i, j int) bool {
+		return c.nodes[i].startTime < c.nodes[j].startTime
+	})
 	fmt.Println("New node added!")
-	c.repartition()
+	c.reassignPartitions()
 }
 
-func (c *Cluster) repartition() {
-	fmt.Println("Repartitioning")
+func (c *Cluster) SetLocalNode(newNode ClusterNode) {
+	c.localNode = newNode
+	c.nodes = append(c.nodes, newNode)
+	c.reassignPartitions()
+}
+
+func (c *Cluster) updateTable(table *dto.PartitionTableDTO) {
+	c.pt.UnAssignAll()
+	for i := 0; i < c.pCount; i++ {
+		c.pt.AssignTo(i, table.Partitions[i])
+	}
+	c.pt.PrintPartitionTable()
+}
+
+func (c *Cluster) reassignPartitions() {
+	fmt.Println("Reassigning partitions!")
 	partitionPerNode := c.pCount / len(c.nodes)
 	leftPartition := c.pCount - (partitionPerNode * len(c.nodes))
 	c.pt.UnAssignAll()
 	for i, node := range c.nodes {
-		fmt.Println("node", node)
 		partitionCount := partitionPerNode
 		if i == 0 {
 			partitionPerNode += leftPartition
 		}
-		address := fmt.Sprintf("%s:%s", node.ip, node.clientPort)
-		c.pt.AssignTo(partitionCount, address)
+		c.pt.AssignTo(partitionCount, node.id)
 	}
 	c.pt.PrintPartitionTable()
-	if c.repartitioningListeners != nil {
-		for _, listener := range c.repartitioningListeners {
-			listener()
-		}
-	}
+	fmt.Println("Partition Table Updated!")
+	go c.onPartitionTableUpdate()
 }
 
 func (c *Cluster) ToDTO() *dto.ClusterDTO {

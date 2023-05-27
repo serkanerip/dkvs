@@ -15,5 +15,6 @@ type ClusterNodeDTO struct {
 	IP          string `json:"ip"`
 	ClientPort  string `json:"client_port"`
 	ClusterPort string `json:"cluster_port"`
+	StartTime   int64  `json:"start_time"`
 	Leader      bool   `json:"leader"`
 }

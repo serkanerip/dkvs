@@ -31,7 +31,7 @@ func NewClient(address string) *Client {
 	c.connMap[address] = tcp.NewConnection(conn, c.packetCh)
 	c.getCluster()
 
-	c.handleMemberConnections()
+	go c.handleTCPPackets()
 	return c
 }
 
@@ -42,9 +42,15 @@ func (c *Client) getCluster() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%v\n", cDTO.PartitionTable)
-	fmt.Printf("%v\n", cDTO.Nodes)
 	c.cluster = cDTO
+}
+
+func (c *Client) updateCluster(cluster *dto.ClusterDTO) {
+	c.cluster = cluster
+	fmt.Println("cluster details updated!")
+	fmt.Printf("%v\n", cluster.PartitionTable)
+	fmt.Printf("%v\n", cluster.Nodes)
+	c.handleMemberConnections()
 }
 
 func (c *Client) handleMemberConnections() {
@@ -63,15 +69,17 @@ func (c *Client) handleMemberConnections() {
 func (c *Client) Get(key string) []byte {
 	getOp := &message.GetOperation{Key: key}
 	pid := common.GetPartitionIDByKey(23, []byte(key))
-	fmt.Println("pid", pid, "address", c.cluster.PartitionTable.Partitions[pid])
-	return c.sendMessageToPartitionOwner(getOp, pid).Payload
+	pOwner := c.cluster.PartitionTable.Partitions[pid]
+	fmt.Println("pid", pid, "owner", pOwner)
+	return c.sendMessageToPartitionOwner(getOp, pOwner).Payload
 }
 
 func (c *Client) Put(key string, val []byte) {
 	putOp := &message.PutOperation{Key: key, Value: val}
 	pid := common.GetPartitionIDByKey(23, []byte(key))
-	fmt.Println("pid", pid, "address", c.cluster.PartitionTable.Partitions[pid])
-	c.sendMessageToPartitionOwner(putOp, pid)
+	pOwner := c.cluster.PartitionTable.Partitions[pid]
+	fmt.Println("pid", pid, "owner", pOwner)
+	c.sendMessageToPartitionOwner(putOp, pOwner)
 }
 
 func (c *Client) sendMessageToAddress(msg message.Message, address string) *message.OperationResponse {
@@ -79,11 +87,18 @@ func (c *Client) sendMessageToAddress(msg message.Message, address string) *mess
 	return c.getOpResponseFromPacket(conn.Send(msg))
 }
 
-func (c *Client) sendMessageToPartitionOwner(msg message.Message, pid int) *message.OperationResponse {
-	address := c.cluster.PartitionTable.Partitions[pid]
-	fmt.Println("address", address)
-	conn := c.connMap[address]
-	return c.getOpResponseFromPacket(conn.Send(msg))
+func (c *Client) sendMessageToPartitionOwner(msg message.Message, ownerId string) *message.OperationResponse {
+	var node *dto.ClusterNodeDTO
+	for _, nodeDTO := range c.cluster.Nodes {
+		if nodeDTO.ID == ownerId {
+			node = &nodeDTO
+			break
+		}
+	}
+	if node == nil {
+		panic("couldn't find node by id!")
+	}
+	return c.sendMessageToAddress(msg, fmt.Sprintf("%s:%s", node.IP, node.ClientPort))
 }
 
 func (c *Client) getOpResponseFromPacket(packet *tcp.Packet) *message.OperationResponse {
@@ -100,8 +115,23 @@ func (c *Client) getOpResponseFromPacket(packet *tcp.Packet) *message.OperationR
 	panic("unknown response msg type!")
 }
 
-func (c *Client) handleTCPPacket() {
+func (c *Client) handleTCPPackets() {
 	for packet := range c.packetCh {
 		fmt.Println("New Packet received from server", packet.MsgType)
+		if packet.MsgType == message.ClusterUpdatedE {
+			msg := &message.ClusterUpdatedEvent{}
+			if err := json.Unmarshal(packet.Body, msg); err != nil {
+				panic(err)
+			}
+			c.updateCluster(msg.Cluster)
+		}
+		response := &message.OperationResponse{
+			IsSuccessful: "true",
+			Error:        "",
+			Payload:      nil,
+		}
+		fmt.Println(packet.MsgType)
+		packet.Connection.SendAsyncWithCorrelationID(packet.CorrelationId, response)
+		fmt.Println("response is sent")
 	}
 }

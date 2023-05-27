@@ -9,10 +9,16 @@ const (
 	JoinOP
 	GetPartitionTableQ
 	GetClusterQ
+	PartitionTableUpdatedE
+	ClusterUpdatedE
+	JoinPartitionsTableReq
 )
 
 func (m MsgType) String() string {
-	return []string{"Read OP", "Put OP", "OP Response", "Join OP", "Get Partition Table Query", "Get Cluster Q"}[m]
+	return []string{
+		"Read OP", "Put OP", "OP Response", "Join OP", "Get Partition Table Query", "Get Cluster Q",
+		"Partition Table Updated E", "Cluster Updated E", "Join Partitions Table Req",
+	}[m]
 }
 
 type Message interface {

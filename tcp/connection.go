@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"net"
+	"time"
 )
 
 type Connection struct {
@@ -44,6 +45,7 @@ func (c *Connection) SendWithCorrelationID(cid string, msg message.Message) *Pac
 }
 
 func (c *Connection) send(cid string, msg message.Message) *Packet {
+	c.conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 	b := c.serializeMsg(cid, msg)
 	ch := make(chan *Packet)
 	c.packetSubscribers[cid] = ch

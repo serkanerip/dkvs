@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	address := fmt.Sprintf("192.168.1.42:6050")
+	address := fmt.Sprintf("192.168.1.49:6050")
 	c := client.NewClient(address)
 	key := "name"
 	c.Put(key, []byte("Serkan Erip"))

@@ -23,29 +23,21 @@ func NewLeaderElection(ctx context.Context, address string) *LeaderElection {
 	return &LeaderElection{cli: cli, ctx: ctx}
 }
 
-func (l *LeaderElection) Close() {
-	fmt.Println("closing leader election")
-	if l.e != nil {
-		if err := l.e.Resign(l.ctx); err != nil {
-			fmt.Println("resign failed!")
-		}
-	}
-	l.s.Close()
-	l.cli.Close()
-}
-
 func (l *LeaderElection) Elect(id string) string {
 	var err error
-	fmt.Println("getting new etcd session")
+	// fmt.Println("getting new etcd session")
 	l.s, err = concurrency.NewSession(l.cli, concurrency.WithTTL(10))
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("getting new election")
+	// fmt.Println("getting new election")
 	l.e = concurrency.NewElection(l.s, "/app-leader-election/")
 	go func() {
 		if err := l.e.Campaign(l.ctx, id); err != nil {
-			panic(err)
+			if err != context.Canceled {
+				panic(err)
+			}
+			return
 		}
 		fmt.Println("Claimed leadership")
 	}()

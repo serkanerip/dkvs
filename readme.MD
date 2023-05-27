@@ -16,8 +16,11 @@ PL - 45 Byte -- Message Body
 ```
 
 ## TODO
+- [x] Use UUID of node in Partition Table DTO
+- [x] Use a config yaml file for configuring nodes
+- [x] Reassign partition table on node join
+- [ ] Reassign partition table on node left
 - [ ] Use a log library
-- [ ] Use a config yaml file for configuring nodes
 - [ ] Implement a heartbeat mechanism
-- [ ] Finish Repartitioning Details
+- [ ] Migrate partitions on node join 
 - [ ] Add backup support

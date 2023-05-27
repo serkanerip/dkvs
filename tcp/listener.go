@@ -8,7 +8,7 @@ import (
 type Listener struct {
 	Addr        string
 	listener    net.Listener
-	connections []*Connection
+	Connections []*Connection
 	PacketCh    chan *Packet
 }
 
@@ -36,6 +36,6 @@ func (t *Listener) acceptConnections() {
 			return
 		}
 		fmt.Println("Accepted new connection", conn.RemoteAddr())
-		t.connections = append(t.connections, NewConnection(conn, t.PacketCh))
+		t.Connections = append(t.Connections, NewConnection(conn, t.PacketCh))
 	}
 }
