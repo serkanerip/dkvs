@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"dkvs/client"
+	"dkvs/pkg/client"
 	"fmt"
 	"math/rand"
 	"sync"

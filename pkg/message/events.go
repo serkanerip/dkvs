@@ -1,7 +1,7 @@
 package message
 
 import (
-	"dkvs/common/dto"
+	"dkvs/pkg/dto"
 )
 
 type PartitionTableUpdatedEvent struct {

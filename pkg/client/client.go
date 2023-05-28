@@ -1,10 +1,10 @@
 package client
 
 import (
-	"dkvs/common"
-	"dkvs/common/dto"
-	"dkvs/common/message"
-	"dkvs/tcp"
+	"dkvs/pkg"
+	"dkvs/pkg/dto"
+	"dkvs/pkg/message"
+	"dkvs/pkg/tcp"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -28,7 +28,7 @@ func NewClient(address string) *Client {
 		connMap:  map[string]*tcp.Connection{},
 		packetCh: make(chan *tcp.Packet),
 	}
-	c.connMap[address] = tcp.NewConnection(conn, c.packetCh)
+	c.connMap[address] = tcp.NewConnection(conn, c.packetCh, nil)
 	c.getCluster()
 
 	go c.handleTCPPackets()
@@ -42,7 +42,7 @@ func (c *Client) getCluster() {
 	if err != nil {
 		panic(err)
 	}
-	c.cluster = cDTO
+	c.updateCluster(cDTO)
 }
 
 func (c *Client) updateCluster(cluster *dto.ClusterDTO) {
@@ -61,14 +61,14 @@ func (c *Client) handleMemberConnections() {
 			if err != nil {
 				panic(fmt.Sprintf("Couldn't connect to servers err is %v\n", err))
 			}
-			c.connMap[address] = tcp.NewConnection(conn, c.packetCh)
+			c.connMap[address] = tcp.NewConnection(conn, c.packetCh, nil)
 		}
 	}
 }
 
 func (c *Client) Get(key string) []byte {
 	getOp := &message.GetOperation{Key: key}
-	pid := common.GetPartitionIDByKey(23, []byte(key))
+	pid := pkg.GetPartitionIDByKey(23, []byte(key))
 	pOwner := c.cluster.PartitionTable.Partitions[pid]
 	fmt.Println("pid", pid, "owner", pOwner)
 	return c.sendMessageToPartitionOwner(getOp, pOwner).Payload
@@ -76,7 +76,7 @@ func (c *Client) Get(key string) []byte {
 
 func (c *Client) Put(key string, val []byte) {
 	putOp := &message.PutOperation{Key: key, Value: val}
-	pid := common.GetPartitionIDByKey(23, []byte(key))
+	pid := pkg.GetPartitionIDByKey(23, []byte(key))
 	pOwner := c.cluster.PartitionTable.Partitions[pid]
 	fmt.Println("pid", pid, "owner", pOwner)
 	c.sendMessageToPartitionOwner(putOp, pOwner)
@@ -84,7 +84,14 @@ func (c *Client) Put(key string, val []byte) {
 
 func (c *Client) sendMessageToAddress(msg message.Message, address string) *message.OperationResponse {
 	conn := c.connMap[address]
-	return c.getOpResponseFromPacket(conn.Send(msg))
+	if conn == nil {
+		panic(fmt.Sprintf("there is no open connection for address: %s\n", address))
+	}
+	resp, err := conn.Send(msg)
+	if err != nil {
+		panic(fmt.Sprintf("failed to write to %s\n", address))
+	}
+	return c.getOpResponseFromPacket(resp)
 }
 
 func (c *Client) sendMessageToPartitionOwner(msg message.Message, ownerId string) *message.OperationResponse {

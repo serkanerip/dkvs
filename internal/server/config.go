@@ -16,7 +16,6 @@ type Config struct {
 	ClusterPort    string   `mapstructure:"cluster-port"`
 	MemberList     []string `mapstructure:"member-list"`
 	PartitionCount int      `mapstructure:"partition-count"`
-	ETCDAddress    string   `mapstructure:"etcd-address"`
 }
 
 func NewConfig() *Config {
@@ -24,20 +23,19 @@ func NewConfig() *Config {
 	viper.SetConfigFile(configFilePath)
 	viper.SetDefault("client-port", "6050")
 	viper.SetDefault("cluster-port", "6060")
-	viper.SetDefault("etcd-address", "localhost:2379")
 	viper.SetDefault("partition-count", 23)
 	viper.SetDefault("member-list", []string{})
 	viper.AutomaticEnv()
 	err := viper.ReadInConfig()
 
 	if err != nil {
-		fmt.Printf("%v", err)
+		fmt.Printf("couldnt read config, err is:%v\n", err)
 	}
 
 	conf := &Config{}
 	err = viper.Unmarshal(conf)
 	if err != nil {
-		fmt.Printf("unable to decode into config struct, %v", err)
+		fmt.Printf("unable to decode into config struct, %v\n", err)
 	}
 	conf.ID = uuid.New()
 	conf.IP = getOutboundIP().String()

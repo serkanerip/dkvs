@@ -1,9 +1,9 @@
 package server
 
 import (
-	"dkvs/common/dto"
-	"dkvs/server/partitiontable"
-	"dkvs/tcp"
+	"dkvs/internal/server/partitiontable"
+	"dkvs/pkg/dto"
+	"dkvs/pkg/tcp"
 	"fmt"
 	"sort"
 )
@@ -11,7 +11,6 @@ import (
 type Cluster struct {
 	localNode              ClusterNode
 	nodes                  []ClusterNode
-	joiningNodes           []ClusterNode
 	pt                     *partitiontable.PartitionTable
 	pCount                 int
 	onPartitionTableUpdate func()
@@ -33,11 +32,26 @@ func (c *Cluster) AddNode(newNode ClusterNode) {
 			fmt.Println("This node is already joined!")
 		}
 	}
+	newNode.conn.OnClose = func() {
+		c.onNodeLeft(newNode.id)
+	}
 	c.nodes = append(c.nodes, newNode)
 	sort.Slice(c.nodes, func(i, j int) bool {
 		return c.nodes[i].startTime < c.nodes[j].startTime
 	})
 	fmt.Println("New node added!")
+	c.reassignPartitions()
+}
+
+func (c *Cluster) onNodeLeft(nodeId string) {
+	fmt.Printf("Node[%s] left the cluster, deleting from the list!\n", nodeId)
+	var newList []ClusterNode
+	for _, node := range c.nodes {
+		if node.id != nodeId {
+			newList = append(newList, node)
+		}
+	}
+	c.nodes = newList
 	c.reassignPartitions()
 }
 

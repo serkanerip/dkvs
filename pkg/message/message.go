@@ -11,7 +11,6 @@ const (
 	GetClusterQ
 	PartitionTableUpdatedE
 	ClusterUpdatedE
-	JoinPartitionsTableReq
 )
 
 func (m MsgType) String() string {

@@ -1,7 +1,7 @@
 package tcp
 
 import (
-	"dkvs/common/message"
+	"dkvs/pkg/message"
 )
 
 type Packet struct {

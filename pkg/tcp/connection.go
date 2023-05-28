@@ -1,11 +1,12 @@
 package tcp
 
 import (
-	"dkvs/common/message"
+	"dkvs/pkg/message"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"io"
 	"net"
 	"time"
 )
@@ -14,56 +15,71 @@ type Connection struct {
 	conn              net.Conn
 	PacketCh          chan *Packet
 	packetSubscribers map[string]chan *Packet
+	OnClose           func()
 }
 
-func NewConnection(conn net.Conn, ch chan *Packet) *Connection {
+func NewConnection(conn net.Conn, ch chan *Packet, onClose func()) *Connection {
 	c := &Connection{
 		conn:              conn,
 		PacketCh:          ch,
 		packetSubscribers: map[string]chan *Packet{},
+		OnClose:           onClose,
 	}
 	go c.read()
 	return c
 }
 
-func (c *Connection) Send(msg message.Message) *Packet {
+func (c *Connection) Close() {
+	c.OnClose()
+	c.conn.Close()
+}
+
+func (c *Connection) Send(msg message.Message) (*Packet, error) {
 	cid := uuid.New().String()
 	return c.send(cid, msg)
 }
 
-func (c *Connection) SendAsync(msg message.Message) *Packet {
+func (c *Connection) SendAsync(msg message.Message) error {
 	cid := uuid.New().String()
+	return c.SendAsyncWithCorrelationID(cid, msg)
+}
+
+func (c *Connection) SendAsyncWithCorrelationID(cid string, msg message.Message) error {
+	return c.sendAsync(cid, msg)
+}
+
+func (c *Connection) SendWithCorrelationID(cid string, msg message.Message) (*Packet, error) {
 	return c.send(cid, msg)
 }
 
-func (c *Connection) SendAsyncWithCorrelationID(cid string, msg message.Message) {
-	c.sendAsync(cid, msg)
-}
-
-func (c *Connection) SendWithCorrelationID(cid string, msg message.Message) *Packet {
-	return c.send(cid, msg)
-}
-
-func (c *Connection) send(cid string, msg message.Message) *Packet {
+func (c *Connection) send(cid string, msg message.Message) (*Packet, error) {
 	c.conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-	b := c.serializeMsg(cid, msg)
+	var data []byte
+	if msg != nil {
+		data = c.serializeMsg(cid, msg)
+	}
 	ch := make(chan *Packet)
 	c.packetSubscribers[cid] = ch
-	_, err := c.conn.Write(b)
+	_, err := c.conn.Write(data)
 	if err != nil {
-		panic(fmt.Sprintf("couldn't write to conn err is: %v\n", err))
+		return nil, err
 	}
 	fmt.Println("Message send waiting for a response!")
-	return <-ch
+	return <-ch, nil
 }
 
-func (c *Connection) sendAsync(cid string, msg message.Message) {
-	b := c.serializeMsg(cid, msg)
-	_, err := c.conn.Write(b)
+func (c *Connection) sendAsync(cid string, msg message.Message) error {
+	c.conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+	var data []byte
+	if msg != nil {
+		data = c.serializeMsg(cid, msg)
+	}
+	_, err := c.conn.Write(data)
 	if err != nil {
-		panic(fmt.Sprintf("couldn't write to conn err is: %v\n", err))
+		return err
 	}
 	fmt.Println("Message send async!")
+	return nil
 }
 
 func (c *Connection) serializeMsg(cid string, msg message.Message) []byte {
@@ -97,7 +113,10 @@ func (c *Connection) read() {
 		var readByteCount int
 		readByteCount, err = c.conn.Read(buffer)
 		if err != nil {
-			break
+			if err == io.EOF {
+				break
+			}
+			fmt.Printf("Failed to read from connection(%s) err is:%v\n", c.conn.RemoteAddr(), err)
 		}
 		bufferStream := byteStream{b: buffer[:readByteCount]}
 		for bufferStream.HasRemaining() {
@@ -140,6 +159,10 @@ func (c *Connection) read() {
 			totalLenBuffer = nil
 		}
 	}
-	fmt.Printf("Failed to read from connection(%s) err is:%v! Closing connection!\n",
-		c.conn.RemoteAddr(), err)
+
+	fmt.Printf("Closing connection to %s!\n", c.conn.RemoteAddr())
+	c.conn.Close()
+	if c.OnClose == nil {
+		c.OnClose()
+	}
 }

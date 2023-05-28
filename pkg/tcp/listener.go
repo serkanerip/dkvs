@@ -3,6 +3,7 @@ package tcp
 import (
 	"fmt"
 	"net"
+	"time"
 )
 
 type Listener struct {
@@ -20,6 +21,7 @@ func (t *Listener) Start() error {
 	}
 	fmt.Println("Listening for requests on", t.Addr)
 	go t.acceptConnections()
+	// go t.sendHeartBeats()
 	return err
 }
 
@@ -36,6 +38,21 @@ func (t *Listener) acceptConnections() {
 			return
 		}
 		fmt.Println("Accepted new connection", conn.RemoteAddr())
-		t.Connections = append(t.Connections, NewConnection(conn, t.PacketCh))
+		t.Connections = append(t.Connections, NewConnection(conn, t.PacketCh, func() {
+
+		}))
+	}
+}
+
+func (t *Listener) sendHeartBeats() {
+	tick := time.NewTicker(10 * time.Second)
+	for {
+		select {
+		case <-tick.C:
+			for i := range t.Connections {
+				fmt.Printf("sending heartbeat to %s\n", t.Connections[i].conn.RemoteAddr())
+				t.Connections[i].SendAsync(nil)
+			}
+		}
 	}
 }

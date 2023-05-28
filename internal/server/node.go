@@ -2,29 +2,27 @@ package server
 
 import (
 	"context"
-	"dkvs/common/message"
-	"dkvs/server/kvstore"
-	"dkvs/server/leader_election"
-	"dkvs/server/partitiontable"
-	"dkvs/tcp"
+	"dkvs/internal/server/kvstore"
+	"dkvs/internal/server/partitiontable"
+	"dkvs/pkg/message"
+	"dkvs/pkg/tcp"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"time"
 )
 
 type Node struct {
-	startTime       int64
-	config          *Config
-	db              *kvstore.KVStore
-	le              *leader_election.LeaderElection
-	leader          bool
-	clientListener  *tcp.Listener
-	clusterListener *tcp.Listener
-	cluster         Cluster
-	clientPacketCh  chan *tcp.Packet
-	clusterPacketCh chan *tcp.Packet
+	startTime                 int64
+	config                    *Config
+	db                        *kvstore.KVStore
+	leader                    bool
+	clientListener            *tcp.Listener
+	clusterListener           *tcp.Listener
+	cluster                   Cluster
+	clientPacketCh            chan *tcp.Packet
+	clusterPacketCh           chan *tcp.Packet
+	pendingClusterConnections map[string]*tcp.Connection
 }
 
 func NewNode(config *Config, ctx context.Context) *Node {
@@ -34,35 +32,25 @@ func NewNode(config *Config, ctx context.Context) *Node {
 		address,
 	)
 	cluster := Cluster{
-		nodes:        []ClusterNode{},
-		joiningNodes: []ClusterNode{},
-		pt:           pt,
-		pCount:       config.PartitionCount,
+		nodes:  []ClusterNode{},
+		pt:     pt,
+		pCount: config.PartitionCount,
 	}
 	db := kvstore.NewKVStore(config.PartitionCount, pt.GetOwnedPartitions()...)
 	n := &Node{
-		startTime:       time.Now().UnixNano(),
-		db:              db,
-		le:              leader_election.NewLeaderElection(ctx, config.ETCDAddress),
-		cluster:         cluster,
-		clusterPacketCh: make(chan *tcp.Packet),
-		clientPacketCh:  make(chan *tcp.Packet),
-		config:          config,
+		startTime:                 time.Now().UnixNano(),
+		db:                        db,
+		cluster:                   cluster,
+		clusterPacketCh:           make(chan *tcp.Packet),
+		clientPacketCh:            make(chan *tcp.Packet),
+		config:                    config,
+		pendingClusterConnections: map[string]*tcp.Connection{},
 	}
 	return n
 }
 
 func (n *Node) Start() {
 	fmt.Printf("Node is starting with [id=%s,ip=%s]\n", n.config.ID, n.config.IP)
-
-	// elect
-	leaderID := n.le.Elect(n.config.ID.String())
-	if leaderID == n.config.ID.String() {
-		n.leader = true
-		log.Println("This instance is the leader!")
-	} else {
-		log.Println("This instance is replica!")
-	}
 
 	n.cluster.onPartitionTableUpdate = n.sendPartitionTableToReplicasAndClients
 	n.cluster.SetLocalNode(ClusterNode{
@@ -82,9 +70,9 @@ func (n *Node) Start() {
 	if err := n.clusterListener.Start(); err != nil {
 		panic(err)
 	}
+	n.startPacketHandlerWorkers(n.clusterPacketCh, 1)
 
 	n.joinMembers()
-	n.startPacketHandlerWorkers(n.clusterPacketCh, 1)
 
 	n.clientListener = &tcp.Listener{
 		Addr:     fmt.Sprintf("%s:%s", n.config.IP, n.config.ClientPort),
@@ -126,22 +114,26 @@ func (n *Node) startPacketHandlerWorkers(ch chan *tcp.Packet, workerCount int) {
 
 func (n *Node) joinMembers() {
 	for _, memberAddr := range n.config.MemberList {
-		fmt.Println("joining to", memberAddr)
-		conn, err := net.Dial("tcp", memberAddr)
-		if err != nil {
-			panic(fmt.Sprintf("Couldn't connect to servers err is %v\n", err))
-		}
-		jo := NewJoinOperation(n)
-		tcpConn := tcp.NewConnection(conn, n.clusterPacketCh)
-		tcpConn.Send(jo)
-		fmt.Println("got join response!")
-		receivedPacket := <-n.clusterPacketCh
-		if receivedPacket.MsgType != message.JoinOP {
-			panic("received packet must be join op!")
-		}
-		n.handleJoinOP(receivedPacket, tcpConn)
-		fmt.Println("joined to", memberAddr)
+		n.joinMember(memberAddr)
 	}
+}
+
+func (n *Node) joinMember(memberAddr string) *tcp.Connection {
+	fmt.Println("joining to", memberAddr)
+	conn, err := net.Dial("tcp", memberAddr)
+	if err != nil {
+		panic(fmt.Sprintf("Couldn't connect to servers err is %v\n", err))
+	}
+	jo := NewJoinOperation(n)
+	tcpConn := tcp.NewConnection(conn, n.clusterPacketCh, nil)
+	if _, err = tcpConn.Send(jo); err != nil {
+		fmt.Printf("Join failed err is: %s\n", err)
+		tcpConn.Close()
+		return nil
+	}
+	n.pendingClusterConnections[memberAddr] = tcpConn
+	fmt.Println("got join response!")
+	return tcpConn
 }
 
 func (n *Node) Close() {
@@ -159,7 +151,7 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 	}
 
 	if t.MsgType == message.JoinOP {
-		n.handleJoinOP(t, nil)
+		n.handleJoinOP(t)
 		return
 	}
 
@@ -218,11 +210,14 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 		Payload:      payload,
 	}
 	fmt.Println(t.MsgType)
-	t.Connection.SendAsyncWithCorrelationID(t.CorrelationId, response)
+	err := t.Connection.SendAsyncWithCorrelationID(t.CorrelationId, response)
+	if err != nil {
+		panic(fmt.Sprintf("couldn't send response, write failed %s!", err))
+	}
 	fmt.Println("response is sent")
 }
 
-func (n *Node) handleJoinOP(t *tcp.Packet, tcpConn *tcp.Connection) {
+func (n *Node) handleJoinOP(t *tcp.Packet) {
 	op := &JoinOperation{}
 	err := json.Unmarshal(t.Body, op)
 	if err != nil {
@@ -237,18 +232,11 @@ func (n *Node) handleJoinOP(t *tcp.Packet, tcpConn *tcp.Connection) {
 		Error:        "",
 		Payload:      nil,
 	}
-	fmt.Println(t.MsgType)
 	t.Connection.SendAsyncWithCorrelationID(t.CorrelationId, response)
 	fmt.Println("join response is sent")
-	if tcpConn == nil {
-		fmt.Printf("joining to %s:%s\n", op.IP, op.ClusterPort)
-		conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", op.IP, op.ClusterPort))
-		if err != nil {
-			panic(fmt.Sprintf("Couldn't connect to servers err is %v\n", err))
-		}
-		jo := NewJoinOperation(n)
-		tcpConn = tcp.NewConnection(conn, n.clusterPacketCh)
-		tcpConn.Send(jo)
+	tcpConn := n.pendingClusterConnections[fmt.Sprintf("%s:%s", op.IP, op.ClusterPort)]
+	if tcpConn == nil { // if this node hasn't joined to the cluster which sent the join request
+		tcpConn = n.joinMember(fmt.Sprintf("%s:%s", op.IP, op.ClusterPort))
 	}
 	n.cluster.AddNode(ClusterNode{
 		id:          op.ID,

@@ -1,7 +1,7 @@
 package server
 
 import (
-	"dkvs/common/message"
+	"dkvs/pkg/message"
 )
 
 type JoinOperation struct {

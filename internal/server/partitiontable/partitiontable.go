@@ -1,7 +1,7 @@
 package partitiontable
 
 import (
-	"dkvs/common/dto"
+	"dkvs/pkg/dto"
 	"fmt"
 )
 

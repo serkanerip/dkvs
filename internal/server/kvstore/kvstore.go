@@ -1,7 +1,7 @@
 package kvstore
 
 import (
-	"dkvs/common"
+	"dkvs/pkg"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -74,5 +74,5 @@ func (k *KVStore) Get(key string) []byte {
 }
 
 func (k *KVStore) partitionIdByKey(key []byte) int {
-	return common.GetPartitionIDByKey(k.partitionCount, key)
+	return pkg.GetPartitionIDByKey(k.partitionCount, key)
 }

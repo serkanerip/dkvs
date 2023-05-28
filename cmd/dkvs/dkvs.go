@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	node "dkvs/server"
+	"dkvs/internal/server"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,7 +12,7 @@ func main() {
 	ctx := context.Background()
 
 	ctx, cancel := context.WithCancel(ctx)
-	n := node.NewNode(node.NewConfig(), ctx)
+	n := server.NewNode(server.NewConfig(), ctx)
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	go func() { n.Start() }()
