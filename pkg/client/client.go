@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"time"
 )
 
 type Client struct {
@@ -18,15 +19,14 @@ type Client struct {
 }
 
 func NewClient(address string) *Client {
-	conn, err := net.Dial("tcp", address)
-	if err != nil {
-		panic(fmt.Sprintf("Couldn't connect to servers err is %v\n", err))
-	}
-
 	c := &Client{
 		address:  address,
 		connMap:  map[string]*tcp.Connection{},
 		packetCh: make(chan *tcp.Packet),
+	}
+	conn, err := c.connectToServer(address, 0)
+	if err != nil {
+		panic(err)
 	}
 	c.connMap[address] = tcp.NewConnection(conn, c.packetCh, nil)
 	c.getCluster()
@@ -57,13 +57,25 @@ func (c *Client) handleMemberConnections() {
 	for _, node := range c.cluster.Nodes {
 		address := fmt.Sprintf("%s:%s", node.IP, node.ClientPort)
 		if _, ok := c.connMap[address]; !ok {
-			conn, err := net.Dial("tcp", address)
+			conn, err := c.connectToServer(address, 0)
 			if err != nil {
-				panic(fmt.Sprintf("Couldn't connect to servers err is %v\n", err))
+				continue
 			}
 			c.connMap[address] = tcp.NewConnection(conn, c.packetCh, nil)
 		}
 	}
+}
+
+func (c *Client) connectToServer(addr string, retryCount int) (net.Conn, error) {
+	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	if err != nil {
+		fmt.Printf("Couldn't connect to servers err is %v\n", err)
+		if retryCount != 2 {
+			time.Sleep(5 * time.Second)
+			return c.connectToServer(addr, retryCount+1)
+		}
+	}
+	return conn, err
 }
 
 func (c *Client) Get(key string) []byte {
