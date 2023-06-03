@@ -24,3 +24,7 @@ func (bs *byteStream) Remaining() []byte {
 func (bs *byteStream) HasRemaining() bool {
 	return bs.i != len(bs.b)
 }
+
+func (bs *byteStream) RemainingBytesCount() int {
+	return len(bs.b) - bs.i
+}

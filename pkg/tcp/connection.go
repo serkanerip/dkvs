@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vmihailenco/msgpack/v5"
 	"io"
+	"math"
 	"net"
 	"sync"
 	"time"
@@ -120,13 +121,17 @@ func (c *Connection) read() {
 		}
 		bufferStream := byteStream{b: buffer[:readByteCount]}
 		for bufferStream.HasRemaining() {
-			b := bufferStream.Next()[0]
 			if totalLenBuffer == nil {
 				totalLenBuffer = make([]byte, 0, 8)
 			}
 
 			if len(totalLenBuffer) != cap(totalLenBuffer) {
-				totalLenBuffer = append(totalLenBuffer, b)
+				bc := int(math.Min(
+					float64(cap(totalLenBuffer)-len(totalLenBuffer)),
+					float64(bufferStream.RemainingBytesCount()),
+				))
+				totalLenBuffer = append(totalLenBuffer, bufferStream.NextNBytes(bc)...)
+				//totalLenBuffer = append(totalLenBuffer, b)
 				continue
 			}
 			totalLen := binary.BigEndian.Uint64(totalLenBuffer)
@@ -137,7 +142,11 @@ func (c *Connection) read() {
 			}
 
 			if len(msgBuffer) != cap(msgBuffer) {
-				msgBuffer = append(msgBuffer, b)
+				bc := int(math.Min(
+					float64(cap(msgBuffer)-len(msgBuffer)),
+					float64(bufferStream.RemainingBytesCount()),
+				))
+				msgBuffer = append(msgBuffer, bufferStream.NextNBytes(bc)...)
 			}
 
 			if (len(msgBuffer)) != cap(msgBuffer) {

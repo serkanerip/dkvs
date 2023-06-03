@@ -38,8 +38,6 @@ func r1(c *client.Client) {
 
 	ch := make(chan bool)
 
-	t := time.Now().Add(60 * time.Second)
-
 	for i := 0; i < 40; i++ {
 		go func() {
 			for range ch {
@@ -51,6 +49,7 @@ func r1(c *client.Client) {
 		}()
 	}
 	ops := 0
+	t := time.Now().Add(60 * time.Second)
 	for {
 		if time.Now().After(t) {
 			fmt.Println("time is out!")
