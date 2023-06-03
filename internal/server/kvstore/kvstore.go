@@ -30,14 +30,11 @@ func NewKVStore(partitionCount int) *KVStore {
 
 func (k *KVStore) printStats() {
 	t := time.NewTicker(30 * time.Second)
-	for {
-		select {
-		case <-t.C:
-			fmt.Println("STATS!")
-			fmt.Println("Put Operations Count", k.putOperationCount)
-			fmt.Println("Get Operations Count", k.getOperationCount)
-			fmt.Println("Total Bytes", k.totalBytes)
-		}
+	for range t.C {
+		fmt.Println("STATS!")
+		fmt.Println("Put Operations Count", k.putOperationCount)
+		fmt.Println("Get Operations Count", k.getOperationCount)
+		fmt.Println("Total Bytes", k.totalBytes)
 	}
 }
 

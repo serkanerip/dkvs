@@ -29,7 +29,7 @@ func NewPartitionTable(count int, owners []string) *PartitionTable {
 			Assigned: false,
 		})
 	}
-	if owners != nil && len(owners) != 0 {
+	if len(owners) != 0 {
 		pt.repartition(owners)
 	}
 	return pt
@@ -66,7 +66,7 @@ func (pt *PartitionTable) PrintPartitionTable() {
 	m := map[string][]string{}
 	for _, p := range pt.partitions {
 		if _, ok := m[p.OwnerID]; !ok {
-			m[p.OwnerID] = make([]string, 0, 0)
+			m[p.OwnerID] = make([]string, 0)
 		}
 		m[p.OwnerID] = append(m[p.OwnerID], fmt.Sprintf("%d", p.ID))
 	}

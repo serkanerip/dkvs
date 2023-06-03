@@ -83,7 +83,7 @@ func (n *Node) Start() {
 }
 
 func (n *Node) sendPartitionTableToReplicasAndClients() {
-	if n.leader == false {
+	if !n.leader {
 		return
 	}
 

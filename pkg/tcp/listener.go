@@ -45,13 +45,10 @@ func (t *Listener) acceptConnections() {
 
 func (t *Listener) sendHeartBeats() {
 	tick := time.NewTicker(10 * time.Second)
-	for {
-		select {
-		case <-tick.C:
-			for i := range t.Connections {
-				fmt.Printf("sending heartbeat to %s\n", t.Connections[i].conn.RemoteAddr())
-				t.Connections[i].SendAsync(nil)
-			}
+	for range tick.C {
+		for i := range t.Connections {
+			fmt.Printf("sending heartbeat to %s\n", t.Connections[i].conn.RemoteAddr())
+			t.Connections[i].SendAsync(nil)
 		}
 	}
 }

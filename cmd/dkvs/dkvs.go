@@ -9,9 +9,7 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
-
-	ctx, cancel := context.WithCancel(ctx)
+	_, cancel := context.WithCancel(context.Background())
 	n := server.NewNode(server.NewConfig())
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
