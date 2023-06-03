@@ -5,7 +5,6 @@ import (
 	"dkvs/pkg/client"
 	"fmt"
 	"math/rand"
-	"sync/atomic"
 	"time"
 )
 
@@ -38,31 +37,29 @@ func r1(c *client.Client) {
 	}
 	fmt.Println("Data prepared!")
 
-	var ops uint64
-	ch := make(chan func())
+	ch := make(chan bool)
+
+	t := time.Now().Add(60 * time.Second)
+
 	for i := 0; i < 40; i++ {
 		go func() {
-			for f := range ch {
-				f()
-				atomic.AddUint64(&ops, 1)
+			for range ch {
+				k := keys[rand.Intn(len(keys))]
+				if !bytes.Equal(c.Get(k), v) {
+					fmt.Println("invalid data")
+				}
 			}
 		}()
 	}
-
-	t := time.Now().Add(60 * time.Second)
+	ops := 0
 	for {
 		if time.Now().After(t) {
 			fmt.Println("time is out!")
 			close(ch)
 			break
 		}
-		ch <- func() {
-			k := keys[rand.Intn(len(keys))]
-			if !bytes.Equal(c.Get(k), v) {
-				fmt.Println("invalid data")
-			}
-			//fmt.Printf("[x]:%s\n", val)
-		}
+		ch <- true
+		ops += 1
 	}
 	fmt.Println("done, rps:", ops/60.0)
 }
