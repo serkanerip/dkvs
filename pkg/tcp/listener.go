@@ -21,7 +21,6 @@ func (t *Listener) Start() error {
 	}
 	fmt.Println("Listening for requests on", t.Addr)
 	go t.acceptConnections()
-	// go t.sendHeartBeats()
 	return err
 }
 

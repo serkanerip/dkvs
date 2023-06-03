@@ -82,7 +82,6 @@ func (c *Client) Get(key string) []byte {
 	getOp := &message.GetOperation{Key: key}
 	pid := pkg.GetPartitionIDByKey(23, []byte(key))
 	pOwner := c.cluster.PartitionTable.Partitions[pid]
-	// fmt.Println("pid", pid, "owner", pOwner)
 	return c.sendMessageToPartitionOwner(getOp, pOwner).Payload
 }
 
@@ -90,7 +89,6 @@ func (c *Client) Put(key string, val []byte) {
 	putOp := &message.PutOperation{Key: key, Value: val}
 	pid := pkg.GetPartitionIDByKey(23, []byte(key))
 	pOwner := c.cluster.PartitionTable.Partitions[pid]
-	// fmt.Println("pid", pid, "owner", pOwner)
 	c.sendMessageToPartitionOwner(putOp, pOwner)
 }
 

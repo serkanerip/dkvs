@@ -14,7 +14,7 @@ type Packet struct {
 
 func PacketFromRaw(conn *Connection, buf []byte) *Packet {
 	bs := byteStream{b: buf}
-	_ = bs.NextNBytes(8) // consume totalLen
+	_ = bs.NextNBytes(8)
 	msgTypeBytes := bs.NextNBytes(1)
 	msgType := message.MsgType(msgTypeBytes[0])
 	cid := string(bs.NextNBytes(36))

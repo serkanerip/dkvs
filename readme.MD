@@ -22,7 +22,7 @@ PL - 45 Byte -- Message Body
 - [x] Use UUID of node in Partition Table DTO
 - [x] Use a config yaml file for configuring nodes
 - [x] Reassign partition table on node participation
-- [ ] Reassign partition table on node disconnection
+- [x] Reassign partition table on node disconnection
 - [ ] Use a log library
 - [ ] Implement a heartbeat mechanism
 - [ ] Migrate partitions on node join 

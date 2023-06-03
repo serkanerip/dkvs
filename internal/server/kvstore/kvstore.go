@@ -9,28 +9,20 @@ import (
 )
 
 type KVStore struct {
-	dataPartitions    map[int]*partition
+	dataPartitions    map[int]*sync.Map
 	partitionCount    int
 	putOperationCount uint64
 	getOperationCount uint64
 	totalBytes        uint64
 }
 
-type partition struct {
-	ID int
-	ds sync.Map
-}
-
 func NewKVStore(partitionCount int) *KVStore {
 	kvStore := &KVStore{
-		dataPartitions: make(map[int]*partition),
+		dataPartitions: make(map[int]*sync.Map),
 		partitionCount: partitionCount,
 	}
 	for i := 0; i < partitionCount; i++ {
-		kvStore.dataPartitions[i] = &partition{
-			ID: i,
-			ds: sync.Map{},
-		}
+		kvStore.dataPartitions[i] = &sync.Map{}
 	}
 	// go kvStore.printStats()
 	return kvStore
@@ -51,7 +43,7 @@ func (k *KVStore) printStats() {
 
 func (k *KVStore) Put(key string, value []byte) {
 	pid := k.partitionIdByKey([]byte(key))
-	k.dataPartitions[pid].ds.Store(key, value)
+	k.dataPartitions[pid].Store(key, value)
 	go func() {
 		atomic.AddUint64(&k.putOperationCount, 1)
 		atomic.AddUint64(&k.totalBytes, uint64(len(value)))
@@ -60,7 +52,7 @@ func (k *KVStore) Put(key string, value []byte) {
 
 func (k *KVStore) Get(key string) []byte {
 	pid := k.partitionIdByKey([]byte(key))
-	val, _ := k.dataPartitions[pid].ds.Load(key)
+	val, _ := k.dataPartitions[pid].Load(key)
 	if val == nil {
 		fmt.Println("value is nil!")
 		return nil

@@ -31,7 +31,9 @@ func NewConnection(conn net.Conn, ch chan *Packet, onClose func()) *Connection {
 }
 
 func (c *Connection) Close() {
-	c.OnClose()
+	if c.OnClose != nil {
+		c.OnClose()
+	}
 	c.conn.Close()
 }
 
@@ -102,7 +104,6 @@ func (c *Connection) serializeMsg(cid string, msg message.Message) []byte {
 }
 
 func (c *Connection) read() {
-	// TODO remove connection in listener's connection list on close
 	defer c.conn.Close()
 	var msgBuffer []byte
 	var totalLenBuffer []byte
@@ -128,16 +129,13 @@ func (c *Connection) read() {
 				totalLenBuffer = append(totalLenBuffer, b)
 				continue
 			}
-
 			totalLen := binary.BigEndian.Uint64(totalLenBuffer)
-			// fmt.Println("message total len is", totalLen)
 
 			if msgBuffer == nil {
 				msgBuffer = make([]byte, 0, totalLen)
 				msgBuffer = append(msgBuffer, totalLenBuffer...)
 			}
 
-			// fmt.Println("op buffer len is", len(msgBuffer))
 			if len(msgBuffer) != cap(msgBuffer) {
 				msgBuffer = append(msgBuffer, b)
 			}
@@ -160,8 +158,5 @@ func (c *Connection) read() {
 	}
 
 	fmt.Printf("Closing connection to %s!\n", c.conn.RemoteAddr())
-	c.conn.Close()
-	if c.OnClose != nil {
-		c.OnClose()
-	}
+	c.Close()
 }

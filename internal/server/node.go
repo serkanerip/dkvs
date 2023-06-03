@@ -190,7 +190,6 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 		if err != nil {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
-		// fmt.Printf("[Type]: %s,[Key]: %s\n", t.MsgType, op.Key)
 		payload = n.db.Get(op.Key)
 	}
 
@@ -201,7 +200,6 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
 		n.db.Put(op.Key, op.Value)
-		// fmt.Printf("[Type]: %b,[Key]: %s, [Val]: %s\n", t.MsgType, op.Key, string(op.Value))
 	}
 
 	if t.MsgType == message.GetPartitionTableQ {
@@ -210,7 +208,6 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 		if err != nil {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
-		// fmt.Printf("[Type]: %s\n", t.MsgType)
 		payload = bytes
 	}
 
@@ -220,7 +217,6 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 		if err != nil {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
-		// fmt.Printf("[Type]: %s\n", t.MsgType)
 		payload = bytes
 	}
 
@@ -229,12 +225,10 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 		Error:        "",
 		Payload:      payload,
 	}
-	// fmt.Println(t.MsgType)
 	err := t.Connection.SendAsyncWithCorrelationID(t.CorrelationId, response)
 	if err != nil {
 		panic(fmt.Sprintf("couldn't send response, write failed %s!", err))
 	}
-	// fmt.Println("response is sent")
 }
 
 func (n *Node) handleJoinOP(t *tcp.Packet) {
