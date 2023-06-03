@@ -5,9 +5,9 @@ import (
 	"dkvs/internal/server/partitiontable"
 	"dkvs/pkg/message"
 	"dkvs/pkg/tcp"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/vmihailenco/msgpack/v5"
 	"net"
 	"os"
 	"time"
@@ -152,7 +152,7 @@ func (n *Node) joinMember(memberAddr string, retryCount int) (*tcp.Connection, e
 		return nil, err
 	}
 	op := &message.OperationResponse{}
-	err = json.Unmarshal(respPacket.Body, op)
+	err = msgpack.Unmarshal(respPacket.Body, op)
 	if err != nil {
 		panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 	}
@@ -186,7 +186,7 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 
 	if t.MsgType == message.ReadOP {
 		op := &message.GetOperation{}
-		err := json.Unmarshal(t.Body, op)
+		err := msgpack.Unmarshal(t.Body, op)
 		if err != nil {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
@@ -195,7 +195,7 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 
 	if t.MsgType == message.PutOP {
 		op := &message.PutOperation{}
-		err := json.Unmarshal(t.Body, op)
+		err := msgpack.Unmarshal(t.Body, op)
 		if err != nil {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
@@ -204,7 +204,7 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 
 	if t.MsgType == message.GetPartitionTableQ {
 		ptDTO := n.cluster.pt.ToDTO()
-		bytes, err := json.Marshal(ptDTO)
+		bytes, err := msgpack.Marshal(ptDTO)
 		if err != nil {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
@@ -213,7 +213,7 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 
 	if t.MsgType == message.GetClusterQ {
 		cDTO := n.cluster.ToDTO()
-		bytes, err := json.Marshal(cDTO)
+		bytes, err := msgpack.Marshal(cDTO)
 		if err != nil {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
@@ -233,7 +233,7 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 
 func (n *Node) handleJoinOP(t *tcp.Packet) {
 	op := &JoinOperation{}
-	err := json.Unmarshal(t.Body, op)
+	err := msgpack.Unmarshal(t.Body, op)
 	if err != nil {
 		panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 	}

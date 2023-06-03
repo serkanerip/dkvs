@@ -5,7 +5,7 @@ import (
 )
 
 type ClusterUpdatedEvent struct {
-	Cluster *dto.ClusterDTO `json:"cluster"`
+	Cluster *dto.ClusterDTO `msgpack:"cluster"`
 }
 
 func (p *ClusterUpdatedEvent) Type() MsgType {

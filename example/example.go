@@ -5,7 +5,6 @@ import (
 	"dkvs/pkg/client"
 	"fmt"
 	"math/rand"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -28,7 +27,7 @@ func main() {
 }
 
 func r1(c *client.Client) {
-	v := []byte("TEST_DATA")
+	v := []byte("TEST_DATA_")
 	var keys []string
 	data := map[string][]byte{}
 	for i := 0; i < 30_000; i++ {
@@ -41,7 +40,7 @@ func r1(c *client.Client) {
 
 	var ops uint64
 	ch := make(chan func())
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 40; i++ {
 		go func() {
 			for f := range ch {
 				f()
@@ -50,7 +49,6 @@ func r1(c *client.Client) {
 		}()
 	}
 
-	var wg sync.WaitGroup
 	t := time.Now().Add(60 * time.Second)
 	for {
 		if time.Now().After(t) {
@@ -58,17 +56,14 @@ func r1(c *client.Client) {
 			close(ch)
 			break
 		}
-		wg.Add(1)
 		ch <- func() {
 			k := keys[rand.Intn(len(keys))]
 			if !bytes.Equal(c.Get(k), v) {
 				fmt.Println("invalid data")
 			}
 			//fmt.Printf("[x]:%s\n", val)
-			wg.Done()
 		}
 	}
-	wg.Wait()
 	fmt.Println("done, rps:", ops/60.0)
 }
 

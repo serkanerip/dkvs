@@ -1,8 +1,8 @@
 package message
 
 type PutOperation struct {
-	Key   string `json:"key"`
-	Value []byte `json:"value"`
+	Key   string `msgpack:"key"`
+	Value []byte `msgpack:"value"`
 }
 
 func (p *PutOperation) Type() MsgType {
@@ -10,7 +10,7 @@ func (p *PutOperation) Type() MsgType {
 }
 
 type GetOperation struct {
-	Key string `json:"key"`
+	Key string `msgpack:"key"`
 }
 
 func (g GetOperation) Type() MsgType {

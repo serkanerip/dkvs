@@ -1,0 +1,13 @@
+# Benchmark
+
+Client: c5.xlarge
+Server: t2.micro
+Duration: 1m
+Key size: 10 bytes
+Val size: 10 bytes
+Key count: 30k
+
+Goroutine count: 10
+Ops/s: R1 -> 10945, R2 -> 11493, R3 -> 10978
+Goroutine count: 40
+Ops/s: R1 -> 22989, R2 -> 24993, R3 -> 25304

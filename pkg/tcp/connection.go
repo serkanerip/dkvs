@@ -3,9 +3,9 @@ package tcp
 import (
 	"dkvs/pkg/message"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/vmihailenco/msgpack/v5"
 	"io"
 	"net"
 	"sync"
@@ -84,7 +84,7 @@ func (c *Connection) sendAsync(cid string, msg message.Message) error {
 }
 
 func (c *Connection) serializeMsg(cid string, msg message.Message) []byte {
-	b, err := json.Marshal(msg)
+	b, err := msgpack.Marshal(&msg)
 	if err != nil {
 		panic("couldn't serialize msg")
 	}

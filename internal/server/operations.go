@@ -5,12 +5,12 @@ import (
 )
 
 type JoinOperation struct {
-	ID          string `json:"id"`
-	IP          string `json:"ip"`
-	ClientPort  string `json:"client_port"`
-	ClusterPort string `json:"cluster_port"`
-	StartTime   int64  `json:"start_time"`
-	Leader      bool   `json:"leader"`
+	ID          string `msgpack:"id"`
+	IP          string `msgpack:"ip"`
+	ClientPort  string `msgpack:"client_port"`
+	ClusterPort string `msgpack:"cluster_port"`
+	StartTime   int64  `msgpack:"start_time"`
+	Leader      bool   `msgpack:"leader"`
 }
 
 func NewJoinOperation(n *Node) *JoinOperation {

@@ -5,8 +5,8 @@ import (
 	"dkvs/pkg/dto"
 	"dkvs/pkg/message"
 	"dkvs/pkg/tcp"
-	"encoding/json"
 	"fmt"
+	"github.com/vmihailenco/msgpack/v5"
 	"net"
 	"time"
 )
@@ -38,7 +38,7 @@ func NewClient(address string) *Client {
 func (c *Client) getCluster() {
 	resp := c.sendMessageToAddress(&message.GetClusterQuery{}, c.address)
 	cDTO := &dto.ClusterDTO{}
-	err := json.Unmarshal(resp.Payload, cDTO)
+	err := msgpack.Unmarshal(resp.Payload, cDTO)
 	if err != nil {
 		panic(err)
 	}
@@ -123,7 +123,7 @@ func (c *Client) getOpResponseFromPacket(packet *tcp.Packet) *message.OperationR
 
 	if packet.MsgType == message.OPResponse {
 		or := &message.OperationResponse{}
-		err := json.Unmarshal(packet.Body, or)
+		err := msgpack.Unmarshal(packet.Body, or)
 		if err != nil {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
@@ -137,7 +137,7 @@ func (c *Client) handleTCPPackets() {
 		fmt.Println("New Packet received from server", packet.MsgType)
 		if packet.MsgType == message.ClusterUpdatedE {
 			msg := &message.ClusterUpdatedEvent{}
-			if err := json.Unmarshal(packet.Body, msg); err != nil {
+			if err := msgpack.Unmarshal(packet.Body, msg); err != nil {
 				panic(err)
 			}
 			c.updateCluster(msg.Cluster)
