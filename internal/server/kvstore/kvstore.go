@@ -9,7 +9,7 @@ import (
 )
 
 type KVStore struct {
-	ownedPartitions   map[int]*partition
+	dataPartitions    map[int]*partition
 	partitionCount    int
 	putOperationCount uint64
 	getOperationCount uint64
@@ -21,14 +21,14 @@ type partition struct {
 	ds sync.Map
 }
 
-func NewKVStore(partitionCount int, partitionIds ...int) *KVStore {
+func NewKVStore(partitionCount int) *KVStore {
 	kvStore := &KVStore{
-		ownedPartitions: make(map[int]*partition),
-		partitionCount:  partitionCount,
+		dataPartitions: make(map[int]*partition),
+		partitionCount: partitionCount,
 	}
-	for _, id := range partitionIds {
-		kvStore.ownedPartitions[id] = &partition{
-			ID: id,
+	for i := 0; i < partitionCount; i++ {
+		kvStore.dataPartitions[i] = &partition{
+			ID: i,
 			ds: sync.Map{},
 		}
 	}
@@ -51,8 +51,7 @@ func (k *KVStore) printStats() {
 
 func (k *KVStore) Put(key string, value []byte) {
 	pid := k.partitionIdByKey([]byte(key))
-	fmt.Println("key", key, "pid", pid, "value", value)
-	k.ownedPartitions[pid].ds.Store(key, value)
+	k.dataPartitions[pid].ds.Store(key, value)
 	go func() {
 		atomic.AddUint64(&k.putOperationCount, 1)
 		atomic.AddUint64(&k.totalBytes, uint64(len(value)))
@@ -61,8 +60,7 @@ func (k *KVStore) Put(key string, value []byte) {
 
 func (k *KVStore) Get(key string) []byte {
 	pid := k.partitionIdByKey([]byte(key))
-	fmt.Println("key", key, "pid", pid)
-	val, _ := k.ownedPartitions[pid].ds.Load(key)
+	val, _ := k.dataPartitions[pid].ds.Load(key)
 	if val == nil {
 		fmt.Println("value is nil!")
 		return nil

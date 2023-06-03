@@ -1,14 +1,15 @@
 package server
 
 import (
-	"context"
 	"dkvs/internal/server/kvstore"
 	"dkvs/internal/server/partitiontable"
 	"dkvs/pkg/message"
 	"dkvs/pkg/tcp"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
+	"os"
 	"time"
 )
 
@@ -25,18 +26,13 @@ type Node struct {
 	pendingClusterConnections map[string]*tcp.Connection
 }
 
-func NewNode(config *Config, ctx context.Context) *Node {
-	address := fmt.Sprintf("%s:%s", config.IP, config.ClientPort)
-	pt := partitiontable.NewPartitionTable(
-		config.PartitionCount,
-		address,
-	)
+func NewNode(config *Config) *Node {
 	cluster := Cluster{
 		nodes:  []ClusterNode{},
-		pt:     pt,
+		pt:     partitiontable.NewPartitionTable(config.PartitionCount, []string{}),
 		pCount: config.PartitionCount,
 	}
-	db := kvstore.NewKVStore(config.PartitionCount, pt.GetOwnedPartitions()...)
+	db := kvstore.NewKVStore(config.PartitionCount)
 	n := &Node{
 		startTime:                 time.Now().UnixNano(),
 		db:                        db,
@@ -113,27 +109,60 @@ func (n *Node) startPacketHandlerWorkers(ch chan *tcp.Packet, workerCount int) {
 }
 
 func (n *Node) joinMembers() {
-	for _, memberAddr := range n.config.MemberList {
-		n.joinMember(memberAddr)
+	if len(n.config.MemberList) != 0 {
+		for _, m := range n.config.MemberList {
+			_, joinErr := n.joinMember(m, 0)
+			if joinErr != nil {
+				fmt.Printf("join failed err is: %v\n", joinErr)
+			}
+		}
+		return
+	}
+	time.Sleep(5 * time.Second)
+	ips, err := net.LookupIP("dkvs-headless-svc.default.svc.cluster.local")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Could not get IPs: %v\n", err)
+		return
+	}
+	for _, ip := range ips {
+		fmt.Printf("IN A %s\n", ip.String())
+		if ip.String() != n.config.IP {
+			_, joinErr := n.joinMember(fmt.Sprintf("%s:6060", ip.String()), 0)
+			if joinErr != nil {
+				fmt.Printf("join failed err is: %v\n", joinErr)
+			}
+		}
 	}
 }
 
-func (n *Node) joinMember(memberAddr string) *tcp.Connection {
+func (n *Node) joinMember(memberAddr string, retryCount int) (*tcp.Connection, error) {
 	fmt.Println("joining to", memberAddr)
 	conn, err := net.Dial("tcp", memberAddr)
 	if err != nil {
-		panic(fmt.Sprintf("Couldn't connect to servers err is %v\n", err))
+		if retryCount != 2 {
+			return n.joinMember(memberAddr, retryCount+1)
+		}
+		return nil, err
 	}
 	jo := NewJoinOperation(n)
 	tcpConn := tcp.NewConnection(conn, n.clusterPacketCh, nil)
-	if _, err = tcpConn.Send(jo); err != nil {
-		fmt.Printf("Join failed err is: %s\n", err)
+	respPacket, err := tcpConn.Send(jo)
+	if err != nil {
 		tcpConn.Close()
-		return nil
+		return nil, err
+	}
+	op := &message.OperationResponse{}
+	err = json.Unmarshal(respPacket.Body, op)
+	if err != nil {
+		panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
+	}
+	if op.Error == AlreadyJoinedErr {
+		tcpConn.Close()
+		return nil, errors.New(AlreadyJoinedErr)
 	}
 	n.pendingClusterConnections[memberAddr] = tcpConn
 	fmt.Println("got join response!")
-	return tcpConn
+	return tcpConn, nil
 }
 
 func (n *Node) Close() {
@@ -142,7 +171,7 @@ func (n *Node) Close() {
 }
 
 func (n *Node) handleTCPPacket(t *tcp.Packet) {
-	fmt.Println("Received packet's cid is:", t.CorrelationId)
+	// fmt.Println("Received packet's cid is:", t.CorrelationId)
 
 	var payload []byte
 	if t.MsgType == message.OPResponse {
@@ -161,7 +190,7 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 		if err != nil {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
-		fmt.Printf("[Type]: %s,[Key]: %s\n", t.MsgType, op.Key)
+		// fmt.Printf("[Type]: %s,[Key]: %s\n", t.MsgType, op.Key)
 		payload = n.db.Get(op.Key)
 	}
 
@@ -172,7 +201,7 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
 		n.db.Put(op.Key, op.Value)
-		fmt.Printf("[Type]: %b,[Key]: %s, [Val]: %s\n", t.MsgType, op.Key, string(op.Value))
+		// fmt.Printf("[Type]: %b,[Key]: %s, [Val]: %s\n", t.MsgType, op.Key, string(op.Value))
 	}
 
 	if t.MsgType == message.GetPartitionTableQ {
@@ -181,7 +210,7 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 		if err != nil {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
-		fmt.Printf("[Type]: %s\n", t.MsgType)
+		// fmt.Printf("[Type]: %s\n", t.MsgType)
 		payload = bytes
 	}
 
@@ -191,17 +220,8 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 		if err != nil {
 			panic(fmt.Sprintf("unmarshalling failed err is :%v\n", err))
 		}
-		fmt.Printf("[Type]: %s\n", t.MsgType)
+		// fmt.Printf("[Type]: %s\n", t.MsgType)
 		payload = bytes
-	}
-
-	if t.MsgType == message.PartitionTableUpdatedE {
-		e := &message.PartitionTableUpdatedEvent{}
-		if err := json.Unmarshal(t.Body, e); err != nil {
-			panic(err)
-		}
-		n.cluster.updateTable(e.Table)
-		fmt.Printf("[Type]: %s\n", t.MsgType)
 	}
 
 	response := &message.OperationResponse{
@@ -209,12 +229,12 @@ func (n *Node) handleTCPPacket(t *tcp.Packet) {
 		Error:        "",
 		Payload:      payload,
 	}
-	fmt.Println(t.MsgType)
+	// fmt.Println(t.MsgType)
 	err := t.Connection.SendAsyncWithCorrelationID(t.CorrelationId, response)
 	if err != nil {
 		panic(fmt.Sprintf("couldn't send response, write failed %s!", err))
 	}
-	fmt.Println("response is sent")
+	// fmt.Println("response is sent")
 }
 
 func (n *Node) handleJoinOP(t *tcp.Packet) {
@@ -234,9 +254,18 @@ func (n *Node) handleJoinOP(t *tcp.Packet) {
 	}
 	t.Connection.SendAsyncWithCorrelationID(t.CorrelationId, response)
 	fmt.Println("join response is sent")
+	if n.cluster.HasNode(op.ID) {
+		fmt.Printf("This node has already joined to node(%s)!\n", op.ID)
+		return
+	}
 	tcpConn := n.pendingClusterConnections[fmt.Sprintf("%s:%s", op.IP, op.ClusterPort)]
 	if tcpConn == nil { // if this node hasn't joined to the cluster which sent the join request
-		tcpConn = n.joinMember(fmt.Sprintf("%s:%s", op.IP, op.ClusterPort))
+		tcpConn, err = n.joinMember(fmt.Sprintf("%s:%s", op.IP, op.ClusterPort), 0)
+		if err != nil {
+			fmt.Printf("join failed err is: %v\n", err)
+		}
+	} else {
+		delete(n.pendingClusterConnections, fmt.Sprintf("%s:%s", op.IP, op.ClusterPort))
 	}
 	n.cluster.AddNode(ClusterNode{
 		id:          op.ID,

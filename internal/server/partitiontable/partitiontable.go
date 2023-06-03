@@ -3,11 +3,13 @@ package partitiontable
 import (
 	"dkvs/pkg/dto"
 	"fmt"
+	"strings"
+	"sync"
 )
 
 type PartitionTable struct {
-	partitions  []*Partition
-	localNodeID string
+	mu         sync.Mutex
+	partitions []*Partition
 }
 
 type Partition struct {
@@ -16,55 +18,60 @@ type Partition struct {
 	Assigned bool
 }
 
-func NewPartitionTable(count int, localNodeID string) *PartitionTable {
+func NewPartitionTable(count int, owners []string) *PartitionTable {
 	pt := &PartitionTable{
-		partitions: make([]*Partition, 0), localNodeID: localNodeID,
+		partitions: make([]*Partition, 0),
 	}
 	for i := 0; i < count; i++ {
 		pt.partitions = append(pt.partitions, &Partition{
 			ID:       i,
-			OwnerID:  localNodeID,
-			Assigned: true,
+			OwnerID:  "",
+			Assigned: false,
 		})
+	}
+	if owners != nil && len(owners) != 0 {
+		pt.repartition(owners)
 	}
 	return pt
 }
 
-func (pt *PartitionTable) GetOwnedPartitions() []int {
-	ownedPartitions := make([]int, 0)
-	for _, p := range pt.partitions {
-		if p.OwnerID == pt.localNodeID {
-			ownedPartitions = append(ownedPartitions, p.ID)
+func (pt *PartitionTable) repartition(ids []string) {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+	partitionPerNode := len(pt.partitions) / len(ids)
+	idIndex := 0
+	for i := range pt.partitions {
+		if i != 0 && i%partitionPerNode == 0 {
+			idIndex = (idIndex + 1) % len(ids)
 		}
+		pt.partitions[i].Assigned = true
+		pt.partitions[i].OwnerID = ids[idIndex]
 	}
-	return ownedPartitions
 }
 
-func (pt *PartitionTable) AssignTo(partitionCount int, ownerID string) {
-	assignedPartitionCount := 0
-	for _, p := range pt.partitions {
-		if p.Assigned == true {
-			fmt.Println("already assigned!")
+func (pt *PartitionTable) ComputeLostPartitionsOf(nextPt *PartitionTable, owner string) []int {
+	var lostPartitions []int
+	for i := range pt.partitions {
+		if pt.partitions[i].OwnerID != owner {
 			continue
 		}
-		if assignedPartitionCount == partitionCount {
-			break
+		if nextPt.partitions[i].OwnerID != pt.partitions[i].OwnerID {
+			lostPartitions = append(lostPartitions, i)
 		}
-		p.OwnerID = ownerID
-		p.Assigned = true
-		assignedPartitionCount++
 	}
-}
-
-func (pt *PartitionTable) UnAssignAll() {
-	for _, p := range pt.partitions {
-		p.Assigned = false
-	}
+	return lostPartitions
 }
 
 func (pt *PartitionTable) PrintPartitionTable() {
+	m := map[string][]string{}
 	for _, p := range pt.partitions {
-		fmt.Printf("P%d Assigned: %v, Address: %s\n", p.ID, p.Assigned, p.OwnerID)
+		if _, ok := m[p.OwnerID]; !ok {
+			m[p.OwnerID] = make([]string, 0, 0)
+		}
+		m[p.OwnerID] = append(m[p.OwnerID], fmt.Sprintf("%d", p.ID))
+	}
+	for k, v := range m {
+		fmt.Printf("[%s]'s partitions: %s\n", k, strings.Join(v, ","))
 	}
 }
 

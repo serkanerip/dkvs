@@ -8,13 +8,14 @@ import (
 	"github.com/google/uuid"
 	"io"
 	"net"
+	"sync"
 	"time"
 )
 
 type Connection struct {
 	conn              net.Conn
 	PacketCh          chan *Packet
-	packetSubscribers map[string]chan *Packet
+	packetSubscribers sync.Map
 	OnClose           func()
 }
 
@@ -22,7 +23,7 @@ func NewConnection(conn net.Conn, ch chan *Packet, onClose func()) *Connection {
 	c := &Connection{
 		conn:              conn,
 		PacketCh:          ch,
-		packetSubscribers: map[string]chan *Packet{},
+		packetSubscribers: sync.Map{},
 		OnClose:           onClose,
 	}
 	go c.read()
@@ -59,12 +60,11 @@ func (c *Connection) send(cid string, msg message.Message) (*Packet, error) {
 		data = c.serializeMsg(cid, msg)
 	}
 	ch := make(chan *Packet)
-	c.packetSubscribers[cid] = ch
+	c.packetSubscribers.Store(cid, ch)
 	_, err := c.conn.Write(data)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Message send waiting for a response!")
 	return <-ch, nil
 }
 
@@ -78,7 +78,6 @@ func (c *Connection) sendAsync(cid string, msg message.Message) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Message send async!")
 	return nil
 }
 
@@ -148,9 +147,9 @@ func (c *Connection) read() {
 			}
 
 			packet := PacketFromRaw(c, msgBuffer)
-			s, ok := c.packetSubscribers[packet.CorrelationId]
+			s, ok := c.packetSubscribers.Load(packet.CorrelationId)
 			if ok {
-				s <- packet
+				s.(chan *Packet) <- packet
 			} else {
 				c.PacketCh <- PacketFromRaw(c, msgBuffer)
 			}
@@ -162,7 +161,7 @@ func (c *Connection) read() {
 
 	fmt.Printf("Closing connection to %s!\n", c.conn.RemoteAddr())
 	c.conn.Close()
-	if c.OnClose == nil {
+	if c.OnClose != nil {
 		c.OnClose()
 	}
 }

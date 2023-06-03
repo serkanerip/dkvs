@@ -26,10 +26,20 @@ type ClusterNode struct {
 	startTime   int64
 }
 
+func (c *Cluster) HasNode(id string) bool {
+	for _, node := range c.nodes {
+		if node.id == id {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Cluster) AddNode(newNode ClusterNode) {
 	for _, node := range c.nodes {
 		if node.id == newNode.id {
 			fmt.Println("This node is already joined!")
+			return
 		}
 	}
 	newNode.conn.OnClose = func() {
@@ -40,7 +50,11 @@ func (c *Cluster) AddNode(newNode ClusterNode) {
 		return c.nodes[i].startTime < c.nodes[j].startTime
 	})
 	fmt.Println("New node added!")
-	c.reassignPartitions()
+	computeLost := false
+	if newNode.startTime > c.localNode.startTime {
+		computeLost = true
+	}
+	c.reassignPartitions(computeLost)
 }
 
 func (c *Cluster) onNodeLeft(nodeId string) {
@@ -52,37 +66,28 @@ func (c *Cluster) onNodeLeft(nodeId string) {
 		}
 	}
 	c.nodes = newList
-	c.reassignPartitions()
+	c.reassignPartitions(true)
 }
 
 func (c *Cluster) SetLocalNode(newNode ClusterNode) {
 	c.localNode = newNode
 	c.nodes = append(c.nodes, newNode)
-	c.reassignPartitions()
+	c.reassignPartitions(false)
 }
 
-func (c *Cluster) updateTable(table *dto.PartitionTableDTO) {
-	c.pt.UnAssignAll()
-	for i := 0; i < c.pCount; i++ {
-		c.pt.AssignTo(i, table.Partitions[i])
+func (c *Cluster) reassignPartitions(computeLost bool) {
+	fmt.Println("Recreating partitions table!")
+	var ids []string
+	for _, node := range c.nodes {
+		ids = append(ids, node.id)
 	}
-	c.pt.PrintPartitionTable()
-}
-
-func (c *Cluster) reassignPartitions() {
-	fmt.Println("Reassigning partitions!")
-	partitionPerNode := c.pCount / len(c.nodes)
-	leftPartition := c.pCount - (partitionPerNode * len(c.nodes))
-	c.pt.UnAssignAll()
-	for i, node := range c.nodes {
-		partitionCount := partitionPerNode
-		if i == 0 {
-			partitionPerNode += leftPartition
-		}
-		c.pt.AssignTo(partitionCount, node.id)
+	nextPt := partitiontable.NewPartitionTable(c.pCount, ids)
+	if computeLost {
+		fmt.Printf("Lost partitions: %v\n", c.pt.ComputeLostPartitionsOf(nextPt, c.localNode.id))
 	}
+	c.pt = nextPt
 	c.pt.PrintPartitionTable()
-	fmt.Println("Partition Table Updated!")
+	fmt.Println("New partition table created!")
 	go c.onPartitionTableUpdate()
 }
 

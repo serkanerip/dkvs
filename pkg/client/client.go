@@ -70,7 +70,7 @@ func (c *Client) Get(key string) []byte {
 	getOp := &message.GetOperation{Key: key}
 	pid := pkg.GetPartitionIDByKey(23, []byte(key))
 	pOwner := c.cluster.PartitionTable.Partitions[pid]
-	fmt.Println("pid", pid, "owner", pOwner)
+	// fmt.Println("pid", pid, "owner", pOwner)
 	return c.sendMessageToPartitionOwner(getOp, pOwner).Payload
 }
 
@@ -78,7 +78,7 @@ func (c *Client) Put(key string, val []byte) {
 	putOp := &message.PutOperation{Key: key, Value: val}
 	pid := pkg.GetPartitionIDByKey(23, []byte(key))
 	pOwner := c.cluster.PartitionTable.Partitions[pid]
-	fmt.Println("pid", pid, "owner", pOwner)
+	// fmt.Println("pid", pid, "owner", pOwner)
 	c.sendMessageToPartitionOwner(putOp, pOwner)
 }
 
@@ -109,7 +109,7 @@ func (c *Client) sendMessageToPartitionOwner(msg message.Message, ownerId string
 }
 
 func (c *Client) getOpResponseFromPacket(packet *tcp.Packet) *message.OperationResponse {
-	fmt.Println("Received response's cid is:", packet.CorrelationId)
+	// fmt.Println("Received response's cid is:", packet.CorrelationId)
 
 	if packet.MsgType == message.OPResponse {
 		or := &message.OperationResponse{}
