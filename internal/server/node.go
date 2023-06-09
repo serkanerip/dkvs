@@ -109,6 +109,7 @@ func (n *Node) startPacketHandlerWorkers(ch chan *tcp.Packet, workerCount int) {
 }
 
 func (n *Node) joinMembers() {
+	time.Sleep(2 * time.Second)
 	if len(n.config.MemberList) != 0 {
 		for _, m := range n.config.MemberList {
 			_, joinErr := n.joinMember(m, 0)
@@ -118,18 +119,19 @@ func (n *Node) joinMembers() {
 		}
 		return
 	}
-	time.Sleep(5 * time.Second)
-	ips, err := net.LookupIP("dkvs-headless-svc.default.svc.cluster.local")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Could not get IPs: %v\n", err)
-		return
-	}
-	for _, ip := range ips {
-		fmt.Printf("IN A %s\n", ip.String())
-		if ip.String() != n.config.IP {
-			_, joinErr := n.joinMember(fmt.Sprintf("%s:6060", ip.String()), 0)
-			if joinErr != nil {
-				fmt.Printf("join failed err is: %v\n", joinErr)
+	if len(n.config.HeadlessDNS) > 0 {
+		ips, err := net.LookupIP(n.config.HeadlessDNS)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Could not get IPs: %v\n", err)
+			return
+		}
+		for _, ip := range ips {
+			fmt.Printf("IN A %s\n", ip.String())
+			if ip.String() != n.config.IP {
+				_, joinErr := n.joinMember(fmt.Sprintf("%s:6060", ip.String()), 0)
+				if joinErr != nil {
+					fmt.Printf("join failed err is: %v\n", joinErr)
+				}
 			}
 		}
 	}

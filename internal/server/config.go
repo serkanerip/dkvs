@@ -16,6 +16,7 @@ type Config struct {
 	ClusterPort    string   `mapstructure:"cluster-port"`
 	MemberList     []string `mapstructure:"member-list"`
 	PartitionCount int      `mapstructure:"partition-count"`
+	HeadlessDNS    string   `mapstructure:"headless-dns"`
 }
 
 func NewConfig() *Config {
