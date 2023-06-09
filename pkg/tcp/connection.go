@@ -108,6 +108,7 @@ func (c *Connection) read() {
 	defer c.conn.Close()
 	var msgBuffer []byte
 	var totalLenBuffer []byte
+	var totalLen uint64
 	var err error
 	for {
 		buffer := make([]byte, 4096)
@@ -131,10 +132,10 @@ func (c *Connection) read() {
 					float64(bufferStream.RemainingBytesCount()),
 				))
 				totalLenBuffer = append(totalLenBuffer, bufferStream.NextNBytes(bc)...)
-				//totalLenBuffer = append(totalLenBuffer, b)
 				continue
+			} else {
+				totalLen = binary.BigEndian.Uint64(totalLenBuffer)
 			}
-			totalLen := binary.BigEndian.Uint64(totalLenBuffer)
 
 			if msgBuffer == nil {
 				msgBuffer = make([]byte, 0, totalLen)
@@ -158,7 +159,7 @@ func (c *Connection) read() {
 			if ok {
 				s.(chan *Packet) <- packet
 			} else {
-				c.PacketCh <- PacketFromRaw(c, msgBuffer)
+				c.PacketCh <- packet
 			}
 
 			msgBuffer = nil
