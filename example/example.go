@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	c := client.NewClient("192.168.1.39:6050")
+	c := client.NewClient("192.168.1.45:6050")
 	r1(c)
 	//key := "name"
 	//c.Put(key, []byte("Serkan Erip"))
@@ -38,7 +38,7 @@ func r1(c *client.Client) {
 
 	ch := make(chan bool)
 
-	for i := 0; i < 40; i++ {
+	for i := 0; i < 30; i++ {
 		go func() {
 			for range ch {
 				k := keys[rand.Intn(len(keys))]
@@ -49,7 +49,7 @@ func r1(c *client.Client) {
 		}()
 	}
 	ops := 0
-	t := time.Now().Add(60 * time.Second)
+	t := time.Now().Add(30 * time.Second)
 	for {
 		if time.Now().After(t) {
 			fmt.Println("time is out!")
@@ -59,7 +59,7 @@ func r1(c *client.Client) {
 		ch <- true
 		ops += 1
 	}
-	fmt.Println("done, rps:", ops/60.0)
+	fmt.Println("done, rps:", ops/30.0)
 }
 
 func init() {

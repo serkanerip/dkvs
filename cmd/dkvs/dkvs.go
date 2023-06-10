@@ -10,14 +10,14 @@ import (
 
 func main() {
 	_, cancel := context.WithCancel(context.Background())
-	n := server.NewNode(server.NewConfig())
+	s := server.NewServer(server.NewConfig())
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	go func() { n.Start() }()
+	go func() { s.Start() }()
 	defer func() {
 		signal.Stop(quit)
 		cancel()
-		n.Close()
+		s.Close()
 	}()
 	<-quit
 }

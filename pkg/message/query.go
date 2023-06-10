@@ -1,8 +1,15 @@
 package message
 
-type GetClusterQuery struct {
+type GetMemberShipQuery struct {
 }
 
-func (p *GetClusterQuery) Type() MsgType {
-	return GetClusterQ
+func (p *GetMemberShipQuery) Type() MsgType {
+	return GetMembershipQ
+}
+
+type GetPartitionTableQuery struct {
+}
+
+func (p *GetPartitionTableQuery) Type() MsgType {
+	return GetPartitionTableQ
 }

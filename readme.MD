@@ -23,6 +23,8 @@ PL - 45 Byte -- Message Body
 - [x] Use a config yaml file for configuring nodes
 - [x] Reassign partition table on node participation
 - [x] Reassign partition table on node disconnection
+- [ ] Migrate partitions on reassignments
+- [ ] Every partition must have a backup
 - [ ] Use a log library
 - [ ] Implement a heartbeat mechanism
 - [ ] Migrate partitions on node join 

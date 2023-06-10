@@ -1,5 +1,5 @@
 package server
 
 const (
-	AlreadyJoinedErr = "ALREADY_JOINED"
+	IAmNotTheLeader = "I_AM_NOT_THE_LEADER"
 )

@@ -6,27 +6,29 @@ import (
 	"github.com/spf13/viper"
 	"log"
 	"net"
-	"os"
 )
 
 type Config struct {
 	ID             uuid.UUID
 	IP             string
-	ClientPort     string   `mapstructure:"client-port"`
-	ClusterPort    string   `mapstructure:"cluster-port"`
-	MemberList     []string `mapstructure:"member-list"`
-	PartitionCount int      `mapstructure:"partition-count"`
-	HeadlessDNS    string   `mapstructure:"headless-dns"`
+	ClientPort     string   `mapstructure:"CLIENT_PORT"`
+	ClusterPort    string   `mapstructure:"CLUSTER_PORT"`
+	MemberList     []string `mapstructure:"MEMBER_LIST"`
+	PartitionCount int      `mapstructure:"PARTITION_COUNT"`
+	HeadlessDNS    string   `mapstructure:"HEADLESS_DNS"`
 }
 
 func NewConfig() *Config {
-	configFilePath := envOrDefault("CONFIG_FILE", "config.yaml")
-	viper.SetConfigFile(configFilePath)
-	viper.SetDefault("client-port", "6050")
-	viper.SetDefault("cluster-port", "6060")
-	viper.SetDefault("partition-count", 23)
-	viper.SetDefault("member-list", []string{})
+	viper.SetConfigFile(".env")
+	viper.SetDefault("CLIENT_PORT", "6050")
+	viper.SetDefault("CLUSTER_PORT", "6060")
+	viper.SetDefault("PARTITION_COUNT", 23)
+	viper.SetDefault("MEMBER_LIST", []string{})
 	viper.AutomaticEnv()
+	viper.BindEnv("HEADLESS_DNS")
+	viper.BindEnv("CLIENT_PORT")
+	viper.BindEnv("CLUSTER_PORT")
+	viper.BindEnv("MEMBER_LIST")
 	err := viper.ReadInConfig()
 
 	if err != nil {
@@ -38,6 +40,7 @@ func NewConfig() *Config {
 	if err != nil {
 		fmt.Printf("unable to decode into config struct, %v\n", err)
 	}
+	fmt.Println("headlessdns", conf.HeadlessDNS)
 	conf.ID = uuid.New()
 	conf.IP = getOutboundIP().String()
 	fmt.Printf("Starting with config below:\n%v\n", conf)
@@ -54,12 +57,4 @@ func getOutboundIP() net.IP {
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
 	return localAddr.IP
-}
-
-func envOrDefault(envName, def string) string {
-	val, ok := os.LookupEnv(envName)
-	if !ok {
-		val = def
-	}
-	return val
 }

@@ -3,6 +3,7 @@ package tcp
 import (
 	"dkvs/pkg/message"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/vmihailenco/msgpack/v5"
@@ -87,7 +88,7 @@ func (c *Connection) sendAsync(cid string, msg message.Message) error {
 func (c *Connection) serializeMsg(cid string, msg message.Message) []byte {
 	b, err := msgpack.Marshal(&msg)
 	if err != nil {
-		panic("couldn't serialize msg")
+		panic(fmt.Sprintf("couldn't serialize msg err is: %v\n", err))
 	}
 	ttl := MessageHeaderLength + len(b)
 
@@ -115,10 +116,12 @@ func (c *Connection) read() {
 		var readByteCount int
 		readByteCount, err = c.conn.Read(buffer)
 		if err != nil {
-			if err == io.EOF {
+			fmt.Println()
+			if err == io.EOF || errors.Is(err, net.ErrClosed) {
 				break
 			}
 			fmt.Printf("Failed to read from connection(%s) err is:%v\n", c.conn.RemoteAddr(), err)
+			break
 		}
 		bufferStream := byteStream{b: buffer[:readByteCount]}
 		for bufferStream.HasRemaining() {
@@ -159,7 +162,11 @@ func (c *Connection) read() {
 			if ok {
 				s.(chan *Packet) <- packet
 			} else {
-				c.PacketCh <- packet
+				if c.PacketCh != nil {
+					c.PacketCh <- packet
+				} else {
+					fmt.Println("Got a new packet but there is no reciever channel!")
+				}
 			}
 
 			msgBuffer = nil
@@ -168,5 +175,7 @@ func (c *Connection) read() {
 	}
 
 	fmt.Printf("Closing connection to %s!\n", c.conn.RemoteAddr())
-	c.Close()
+	if !errors.Is(err, net.ErrClosed) {
+		c.Close()
+	}
 }

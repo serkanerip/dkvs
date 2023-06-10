@@ -2,8 +2,9 @@ package client
 
 import (
 	"dkvs/pkg"
-	"dkvs/pkg/dto"
+	"dkvs/pkg/membership"
 	"dkvs/pkg/message"
+	"dkvs/pkg/partitiontable"
 	"dkvs/pkg/tcp"
 	"fmt"
 	"github.com/vmihailenco/msgpack/v5"
@@ -12,10 +13,11 @@ import (
 )
 
 type Client struct {
-	address  string
-	cluster  *dto.ClusterDTO
-	connMap  map[string]*tcp.Connection
-	packetCh chan *tcp.Packet
+	address    string
+	memberShip *membership.MemberShip
+	pt         *partitiontable.PartitionTable
+	connMap    map[string]*tcp.Connection
+	packetCh   chan *tcp.Packet
 }
 
 func NewClient(address string) *Client {
@@ -29,32 +31,44 @@ func NewClient(address string) *Client {
 		panic(err)
 	}
 	c.connMap[address] = tcp.NewConnection(conn, c.packetCh, nil)
-	c.getCluster()
+	c.getMembership()
+	c.getPartitionTable()
 
 	go c.handleTCPPackets()
 	return c
 }
 
-func (c *Client) getCluster() {
-	resp := c.sendMessageToAddress(&message.GetClusterQuery{}, c.address)
-	cDTO := &dto.ClusterDTO{}
-	err := msgpack.Unmarshal(resp.Payload, cDTO)
+func (c *Client) getMembership() {
+	resp := c.sendMessageToAddress(&message.GetMemberShipQuery{}, c.address)
+	m := &membership.MemberShip{}
+	err := msgpack.Unmarshal(resp.Payload, m)
 	if err != nil {
 		panic(err)
 	}
-	c.updateCluster(cDTO)
+	c.updateMembership(m)
 }
 
-func (c *Client) updateCluster(cluster *dto.ClusterDTO) {
-	c.cluster = cluster
-	fmt.Println("cluster details updated!")
-	fmt.Printf("%v\n", cluster.PartitionTable)
-	fmt.Printf("%v\n", cluster.Nodes)
+func (c *Client) getPartitionTable() {
+	resp := c.sendMessageToAddress(&message.GetPartitionTableQuery{}, c.address)
+	pt := &partitiontable.PartitionTable{}
+	err := msgpack.Unmarshal(resp.Payload, pt)
+	if err != nil {
+		panic(err)
+	}
+	c.pt = pt
+	fmt.Println("updated pt!")
+}
+
+func (c *Client) updateMembership(m *membership.MemberShip) {
+	c.memberShip = m
+	fmt.Println("membership updated!")
+	fmt.Printf("LeaderID: %v\n", m.LeaderID)
+	fmt.Printf("Node: %v\n", m.Nodes)
 	c.handleMemberConnections()
 }
 
 func (c *Client) handleMemberConnections() {
-	for _, node := range c.cluster.Nodes {
+	for _, node := range c.memberShip.Nodes {
 		address := fmt.Sprintf("%s:%s", node.IP, node.ClientPort)
 		if _, ok := c.connMap[address]; !ok {
 			conn, err := c.connectToServer(address, 0)
@@ -81,14 +95,14 @@ func (c *Client) connectToServer(addr string, retryCount int) (net.Conn, error) 
 func (c *Client) Get(key string) []byte {
 	getOp := &message.GetOperation{Key: key}
 	pid := pkg.GetPartitionIDByKey(23, []byte(key))
-	pOwner := c.cluster.PartitionTable.Partitions[pid]
+	pOwner := c.pt.Partitions[pid]
 	return c.sendMessageToPartitionOwner(getOp, pOwner).Payload
 }
 
 func (c *Client) Put(key string, val []byte) {
 	putOp := &message.PutOperation{Key: key, Value: val}
 	pid := pkg.GetPartitionIDByKey(23, []byte(key))
-	pOwner := c.cluster.PartitionTable.Partitions[pid]
+	pOwner := c.pt.Partitions[pid]
 	c.sendMessageToPartitionOwner(putOp, pOwner)
 }
 
@@ -105,17 +119,12 @@ func (c *Client) sendMessageToAddress(msg message.Message, address string) *mess
 }
 
 func (c *Client) sendMessageToPartitionOwner(msg message.Message, ownerId string) *message.OperationResponse {
-	var node *dto.ClusterNodeDTO
-	for _, nodeDTO := range c.cluster.Nodes {
-		if nodeDTO.ID == ownerId {
-			node = &nodeDTO
-			break
+	for _, n := range c.memberShip.Nodes {
+		if n.ID == ownerId {
+			return c.sendMessageToAddress(msg, fmt.Sprintf("%s:%s", n.IP, n.ClientPort))
 		}
 	}
-	if node == nil {
-		panic("couldn't find node by id!")
-	}
-	return c.sendMessageToAddress(msg, fmt.Sprintf("%s:%s", node.IP, node.ClientPort))
+	panic("couldn't find node by id!")
 }
 
 func (c *Client) getOpResponseFromPacket(packet *tcp.Packet) *message.OperationResponse {
@@ -135,12 +144,12 @@ func (c *Client) getOpResponseFromPacket(packet *tcp.Packet) *message.OperationR
 func (c *Client) handleTCPPackets() {
 	for packet := range c.packetCh {
 		fmt.Println("New Packet received from server", packet.MsgType)
-		if packet.MsgType == message.ClusterUpdatedE {
-			msg := &message.ClusterUpdatedEvent{}
+		if packet.MsgType == message.TopologyUpdatedE {
+			msg := &membership.TopologyUpdatedEvent{}
 			if err := msgpack.Unmarshal(packet.Body, msg); err != nil {
 				panic(err)
 			}
-			c.updateCluster(msg.Cluster)
+			c.updateMembership(msg.Membership)
 		}
 		response := &message.OperationResponse{
 			IsSuccessful: "true",
