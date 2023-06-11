@@ -28,7 +28,7 @@ func (p *Operation) Type() message.MsgType {
 }
 
 type OperationResponse struct {
-	LeaderAddress string
+	Leader *node.Node
 }
 
 func (p *OperationResponse) Type() message.MsgType {

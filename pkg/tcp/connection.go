@@ -19,6 +19,7 @@ type Connection struct {
 	PacketCh          chan *Packet
 	packetSubscribers sync.Map
 	OnClose           func()
+	closed            bool
 }
 
 func NewConnection(conn net.Conn, ch chan *Packet, onClose func()) *Connection {
@@ -37,6 +38,11 @@ func (c *Connection) Close() {
 		c.OnClose()
 	}
 	c.conn.Close()
+	c.closed = true
+}
+
+func (c *Connection) IsClosed() bool {
+	return c.closed
 }
 
 func (c *Connection) Send(msg message.Message) (*Packet, error) {
@@ -116,7 +122,6 @@ func (c *Connection) read() {
 		var readByteCount int
 		readByteCount, err = c.conn.Read(buffer)
 		if err != nil {
-			fmt.Println()
 			if err == io.EOF || errors.Is(err, net.ErrClosed) {
 				break
 			}

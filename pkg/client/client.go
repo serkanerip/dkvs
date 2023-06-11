@@ -144,8 +144,8 @@ func (c *Client) getOpResponseFromPacket(packet *tcp.Packet) *message.OperationR
 func (c *Client) handleTCPPackets() {
 	for packet := range c.packetCh {
 		fmt.Println("New Packet received from server", packet.MsgType)
-		if packet.MsgType == message.TopologyUpdatedE {
-			msg := &membership.TopologyUpdatedEvent{}
+		if packet.MsgType == message.MembershipUpdatedE {
+			msg := &membership.UpdatedEvent{}
 			if err := msgpack.Unmarshal(packet.Body, msg); err != nil {
 				panic(err)
 			}

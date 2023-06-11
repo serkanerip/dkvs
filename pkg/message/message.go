@@ -8,7 +8,7 @@ const (
 	JoinOP
 	GetMembershipQ
 	GetPartitionTableQ
-	TopologyUpdatedE
+	MembershipUpdatedE
 	PTUpdatedE
 	JoinOPResp
 	OPResponse
@@ -18,7 +18,7 @@ func (m MsgType) String() string {
 	return []string{
 		"Read OP", "Put OP", "Join OP",
 		"Get Membership Query", "GetPartitionTableQ",
-		"Topology Updated Event", "PT Updated Event",
+		"MM Updated Event", "PT Updated Event",
 		"Join OP Response", "OP Response",
 	}[m]
 }

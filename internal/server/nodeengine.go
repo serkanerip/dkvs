@@ -8,7 +8,6 @@ import (
 
 type NodeEngine struct {
 	config          *Config
-	db              *KVStore
 	clientListener  *tcp.Listener
 	clusterListener *tcp.Listener
 	mm              *MembershipManager
@@ -19,13 +18,10 @@ type NodeEngine struct {
 }
 
 func NewNodeEngine(
-	mm *MembershipManager, db *KVStore,
-	js *JoinService, c *Config,
-	pd *PacketDelivery,
+	mm *MembershipManager, js *JoinService, c *Config, pd *PacketDelivery,
 ) *NodeEngine {
 	n := &NodeEngine{
 		config:          c,
-		db:              db,
 		mm:              mm,
 		clusterPacketCh: make(chan *tcp.Packet),
 		clientPacketCh:  make(chan *tcp.Packet),
@@ -50,12 +46,12 @@ func (n *NodeEngine) Start() {
 	n.startPacketHandlerWorkers(n.clusterPacketCh, 1)
 
 	memberAddresses := n.discoverMembers()
-	joinedToLeader := n.joinService.Join(memberAddresses)
-	if joinedToLeader {
+	leaderNode := n.joinService.Join(memberAddresses)
+	if leaderNode != nil {
 		fmt.Println("Joined to an existing cluster!")
-	} else {
-		n.mm.DetermineLeader()
+		n.mm.SetNewLeader(leaderNode)
 	}
+	n.mm.Start()
 	n.joinService.joinLock.Unlock()
 
 	n.clientListener = &tcp.Listener{
@@ -90,9 +86,9 @@ func (n *NodeEngine) sendPartitionTableToReplicasAndClients() {
 			return
 		}
 		for _, clientConn := range n.clientListener.Connections {
-			clientConn.Send(&membership.TopologyUpdatedEvent{Membership: n.mm.Membership})
+			clientConn.Send(&membership.UpdatedEvent{Membership: n.mm.Membership})
 		}
-		fmt.Println("Shared latest mm details with clients!")
+		fmt.Println("Shared topology updated event with clients!")
 	}()
 }
 

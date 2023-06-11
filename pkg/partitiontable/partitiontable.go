@@ -1,6 +1,7 @@
 package partitiontable
 
 import (
+	"dkvs/pkg/message"
 	"fmt"
 	"strings"
 )
@@ -8,6 +9,14 @@ import (
 type PartitionTable struct {
 	Partitions map[int]string
 	pCount     int
+}
+
+type UpdatedEvent struct {
+	PartitionTable *PartitionTable
+}
+
+func (p *UpdatedEvent) Type() message.MsgType {
+	return message.PTUpdatedE
 }
 
 func NewPartitionTable(count int, owners []string) *PartitionTable {
